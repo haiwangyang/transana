@@ -60,13 +60,38 @@ for (strain in c("w1118", "oreR")){
   dds = DESeq(dds)
 
   res = results(dds) # log2fc is f/m, so Yp1-transcript has 13
+  res_sig = res[res$padj<alpha & !is.na(res$padj),]
+  res_sig_female = res_sig[res_sig$log2FoldChange>0,]
+  res_sig_male = res_sig[res_sig$log2FoldChange<0,]
+  FBtrs_res_sig_female = rownames(res_sig_female)  
+  FBtrs_res_sig_male = rownames(res_sig_male)
+
+  FBgns_all = rownames(part_res)
+  FBgns_all_minus_m = FBgns_all[! FBgns_all %in% FBgns_res_sig_male]
+  FBgns_unbiased = FBgns_all_minus_m[! FBgns_all_minus_m %in% FBgns_res_sig_female]
+  df_bias_m = data.frame("FBgn_ID"=as.character(unlist(FBgns_res_sig_male)),"bias"="male")
+  df_bias_unbias = data.frame("FBgn_ID"=FBgns_unbiased,"bias"="unbiased")
+  df_bias_f = data.frame("FBgn_ID"=as.character(unlist(FBgns_res_sig_female)),"bias"="female")
+  df_bias_total = rbind(df_bias_m,df_bias_unbias,df_bias_f)
+  df_bias_total$FBgn_ID = as.character(df_bias_total$FBgn_ID)
+  df_bias_total = df_bias_total[order(df_bias_total$FBgn_ID),]
   
   normCounts = counts(dds, normalized=TRUE)
   x = as.data.frame(log2(normCounts+1))
   x$MAplot_mean = as.numeric(apply(x, 1, mean))
   x$MAplot_log2FoldChange = res$log2FoldChange
     
-    
+  pdf(paste0(base_path, "/output/", strain, ".", tissue, ".MAplot.pdf"),width=40,height=40)
+
+  x$MAplot_log2FoldChange[x$MAplot_log2FoldChange > 2] = 2
+  x$MAplot_log2FoldChange[x$MAplot_log2FoldChange < -2] = -2
+  plot(x$MAplot_mean, x$MAplot_log2FoldChange, col=x$col, pch = 19, cex = 8, xlim=c(0,18), cex.axis=5, cex.lab=5, cex.main=5, main = paste0(capitalize(species), " ", get_tissueFull(tissue) ), xlab="mean expression (log2 normalized read count + 1)", ylab="log2 fold change of male to female")
+  text(16, 1.5, labels = dim(df_bias_m)[1], col = rgb(0,0,1), cex = 20)
+  text(16, -1.5, labels = dim(df_bias_f)[1], col = rgb(1,0,0), cex = 20)
+  # #text(x$MAplot_mean_R1, x$MAplot_log2FoldChange + 0.1, labels = x$label)
+  dev.off()
+  
+  
   head(res['FBtr0071419',])
   head(res['FBtr0346261',])
   
