@@ -27,31 +27,50 @@ This is an R Markdown document. Markdown is a simple formatting syntax for autho
 
 When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
 
-```{r get big expression expression matrix}
+```{r get basics}
+tissues_in_final_order = c( "wb", "go", "re", "ge", "tx", "dg", "hd", "ac")
+tissues_in_final_order_no_ge = c( "wb", "go", "re", "tx", "dg", "hd", "ac")
+
 species = "dmel"
-dir <- paste0(base_path, "testdata/")
+dir <- paste0(base_path, "data/")
 samples <- read.table(file.path(dir, paste0(species, ".design")), header = TRUE)
-files <- file.path(dir, "salmon", "YO", samples$sample_id, "quant.sf")
-names(files) <- paste0("sample", 1:6)
+files <- file.path(dir, "salmon", "FB", samples$sample_id, "quant.sf")
+names(files) <- samples$sample_id
 tx2gene = read.table(paste0(dir, species, ".tx2gene"), header=TRUE)
+gene2ortho = read.table(paste0(dir, species, ".ortholog"), header=TRUE)
+gene2symbol = read.table(paste0(dir, species, ".FBgn2symbol"), header=TRUE)
+fetch_files_by_tissue = function(strain, tissue, files){
+  return(files[ grepl(paste0(strain, "_"), files) & grepl(paste0("_", tissue, "_"), files)])
+}
 
 ```
 
-```{r run tximport}
-# gene-level
-#txi <- tximport(files, type = "salmon", tx2gene = tx2gene)
+```{r run transcript-level tximport and deseq2 based on sex}
 
-# transcript-level
-txi <- tximport(files, type = "salmon", txOut = TRUE)
-```
+for (strain in c("w1118", "oreR")){
+  for (tissue in tissues_in_final_order){
 
-```{r deseq2}
-sampleTable <- data.frame(condition = factor(rep(c("A", "B"), each = 3)))
-rownames(sampleTable) <- colnames(txi$counts)
-dds <- DESeqDataSetFromTximport(txi, sampleTable, ~condition)
+  part_files = fetch_files_by_tissue(strain, tissue, files)
+  part_samples = samples[samples$sample_id %in% names(part_files),]
+  part_samples$sex = factor(part_samples$sex, levels = c("m", "f"))
+  
+  txi <- tximport(part_files, type = "salmon", txOut = TRUE) # transcript-level output
+  
+  dds <- DESeqDataSetFromTximport(txi, part_samples, ~sex)
+  dds = DESeq(dds)
 
-dds = DESeq(dds)
-
-res = results(dds)
-summary(res,alpha=0.05)
+  res = results(dds) # log2fc is f/m, so Yp1-transcript has 13
+  
+  normCounts = counts(dds, normalized=TRUE)
+  x = as.data.frame(log2(normCounts+1))
+  x$MAplot_mean = as.numeric(apply(x, 1, mean))
+  x$MAplot_log2FoldChange = res$log2FoldChange
+    
+    
+  head(res['FBtr0071419',])
+  head(res['FBtr0346261',])
+  
+  summary(res,alpha=0.05)
+  
+  
 ```
