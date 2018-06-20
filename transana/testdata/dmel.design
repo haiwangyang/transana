@@ -1,0 +1,7 @@
+sample_id	strain	sex	tissue	replicate
+w1118_f_go_R1	w1118	f	go	R1
+w1118_f_go_R2	w1118	f	go	R2
+w1118_f_go_R3	w1118	f	go	R3
+w1118_m_go_R1	w1118	m	go	R1
+w1118_m_go_R2	w1118	m	go	R2
+w1118_m_go_R3	w1118	m	go	R3
