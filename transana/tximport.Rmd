@@ -38,7 +38,7 @@ files <- file.path(dir, "salmon", "FB", samples$sample_id, "quant.sf")
 names(files) <- samples$sample_id
 tx2gene = read.table(paste0(dir, species, ".tx2gene"), header=TRUE)
 gene2ortho = read.table(paste0(dir, species, ".ortholog"), header=TRUE)
-gene2symbol = read.table(paste0(dir, species, ".FBgn2symbol"), header=TRUE)
+gene2symbol = read.table(paste0(dir, species, ".FBtr2symbol"), header=TRUE)
 fetch_files_by_tissue = function(strain, tissue, files){
   return(files[ grepl(paste0(strain, "_"), files) & grepl(paste0("_", tissue, "_"), files)])
 }
@@ -60,31 +60,44 @@ for (strain in c("w1118", "oreR")){
   dds = DESeq(dds)
 
   res = results(dds) # log2fc is f/m, so Yp1-transcript has 13
+  res = res[order(row.names(res)),]
+  
   res_sig = res[res$padj<alpha & !is.na(res$padj),]
   res_sig_female = res_sig[res_sig$log2FoldChange>0,]
   res_sig_male = res_sig[res_sig$log2FoldChange<0,]
   FBtrs_res_sig_female = rownames(res_sig_female)  
   FBtrs_res_sig_male = rownames(res_sig_male)
-
-  FBgns_all = rownames(part_res)
-  FBgns_all_minus_m = FBgns_all[! FBgns_all %in% FBgns_res_sig_male]
-  FBgns_unbiased = FBgns_all_minus_m[! FBgns_all_minus_m %in% FBgns_res_sig_female]
-  df_bias_m = data.frame("FBgn_ID"=as.character(unlist(FBgns_res_sig_male)),"bias"="male")
-  df_bias_unbias = data.frame("FBgn_ID"=FBgns_unbiased,"bias"="unbiased")
-  df_bias_f = data.frame("FBgn_ID"=as.character(unlist(FBgns_res_sig_female)),"bias"="female")
+  
+  FBtrs_all = rownames(res)
+  FBtrs_all_minus_m = FBtrs_all[! FBtrs_all %in% FBtrs_res_sig_male]
+  FBtrs_unbiased = FBtrs_all_minus_m[! FBtrs_all_minus_m %in% FBtrs_res_sig_female]
+  df_bias_m = data.frame("FBtr_ID"=as.character(unlist(FBtrs_res_sig_male)),"bias"="male")
+  df_bias_unbias = data.frame("FBtr_ID"=FBtrs_unbiased,"bias"="unbiased")
+  df_bias_f = data.frame("FBtr_ID"=as.character(unlist(FBtrs_res_sig_female)),"bias"="female")
   df_bias_total = rbind(df_bias_m,df_bias_unbias,df_bias_f)
-  df_bias_total$FBgn_ID = as.character(df_bias_total$FBgn_ID)
-  df_bias_total = df_bias_total[order(df_bias_total$FBgn_ID),]
+  df_bias_total$FBtr_ID = as.character(df_bias_total$FBtr_ID)
+  df_bias_total = df_bias_total[order(df_bias_total$FBtr_ID),]
+  df_bias_total = df_bias_total[order(df_bias_total$FBtr_ID),]
   
   normCounts = counts(dds, normalized=TRUE)
   x = as.data.frame(log2(normCounts+1))
+  x = x[order(row.names(x)),]
+  
   x$MAplot_mean = as.numeric(apply(x, 1, mean))
   x$MAplot_log2FoldChange = res$log2FoldChange
-    
-  pdf(paste0(base_path, "/output/", strain, ".", tissue, ".MAplot.pdf"),width=40,height=40)
-
+  x$bias = df_bias_total$bias
+  
+ 
   x$MAplot_log2FoldChange[x$MAplot_log2FoldChange > 2] = 2
   x$MAplot_log2FoldChange[x$MAplot_log2FoldChange < -2] = -2
+  x$MAplot_log2FoldChange[is.na(x$MAplot_log2FoldChange)] = 0
+  
+  x$col = rgb(0,0,0,0.3)
+  x$col[x$bias == "female"] = rgb(1,0,0,0.6)
+  x$col[x$bias == "male"] = rgb(0,0,1,0.6)
+    
+  
+  pdf(paste0(base_path, "/output/", strain, ".", tissue, ".MAplot.pdf"),width=40,height=40)
   plot(x$MAplot_mean, x$MAplot_log2FoldChange, col=x$col, pch = 19, cex = 8, xlim=c(0,18), cex.axis=5, cex.lab=5, cex.main=5, main = paste0(capitalize(species), " ", get_tissueFull(tissue) ), xlab="mean expression (log2 normalized read count + 1)", ylab="log2 fold change of male to female")
   text(16, 1.5, labels = dim(df_bias_m)[1], col = rgb(0,0,1), cex = 20)
   text(16, -1.5, labels = dim(df_bias_f)[1], col = rgb(1,0,0), cex = 20)
