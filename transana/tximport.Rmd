@@ -148,14 +148,15 @@ g[get_FBgn_for_symbol("fne"),]
 
 t[get_FBtrs_for_symbol("fne"),]
 
+# Conclusion
+# Yp1 (FBgn0004045) expression is sex-biased at both gene and isoform level
+# fne (FBgn0086675) expression is not sex-biased at gene level, but two of fne isoforms show sex-biased expression
 
 ```
-* Summary
-* Yp1 (FBgn0004045) expression is sex-biased at both gene and isoform level
-* fne (FBgn0086675) expression is not sex-biased at gene level, but two of fne isoforms show sex-biased expression
 
 
-# isoform-level MAplots
+
+# Isoform-level MAplots
 ```{r print isoform-level MAplots}
 for (strain_tissue in names(alltrans)){
   x = alltrans[[strain_tissue]]
@@ -220,8 +221,6 @@ dev.off()
 
 # compare and summarize gene and transcript level salmon-tximport-deseq2 analyses
 ```{r compare gene and transcript level salmon-tximport-deseq2 analyses of sex-biased expression}
-# fne expression is not sex-biased at gene level
-# but two of fne isoforms show sex-biased expression
 c = data.frame(row.names=FBgn2FBtr$FBtr, FBgn = FBgn2FBtr$FBgn)
 
 alltab = data.frame(row.names = c("FALSE.FALSE.FALSE.FALSE", "TRUE.FALSE.FALSE.FALSE", "FALSE.TRUE.FALSE.FALSE","TRUE.TRUE.FALSE.FALSE", "FALSE.FALSE.TRUE.FALSE", "TRUE.FALSE.TRUE.FALSE", "FALSE.TRUE.TRUE.FALSE", "TRUE.TRUE.TRUE.FALSE", "FALSE.FALSE.FALSE.TRUE", "TRUE.FALSE.FALSE.TRUE", "FALSE.TRUE.FALSE.TRUE", "TRUE.TRUE.FALSE.TRUE", "FALSE.FALSE.TRUE.TRUE", "TRUE.FALSE.TRUE.TRUE", "FALSE.TRUE.TRUE.TRUE", "TRUE.TRUE.TRUE.TRUE" ))
