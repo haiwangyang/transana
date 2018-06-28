@@ -16,7 +16,7 @@ library(ggplot2)
 library(DESeq2)
 ```
 
-
+# basic variables, data, and look-up tables
 ```{r basic variables, data, and look-up tables}
 base_path = "/Users/yangh13/transana/transana/"
 dir <- paste0(base_path, "data/")
@@ -39,7 +39,7 @@ gene2symbol = read.table(paste0(dir, species, ".FBgn2symbol"), header=TRUE)
 ```
 
 
-
+# basic funtions
 ```{r basic funtions}
 first = function(str) {v = strsplit(as.character(str), "\\_")[[1]]; paste(v[1])}
 second = function(str) {v = strsplit(as.character(str), "\\_")[[1]]; paste(v[2])}
@@ -67,8 +67,7 @@ get_FBtrs_for_symbol = function(target_gene){
 
 
 
-
-
+# transcript-level salmon-tximport-deseq2 analyses of sex-biased expression
 ```{r get transcript-level salmon-tximport-deseq2 analyses of sex-biased expression}
 analyze_sex_bias = function(strain, tissue, level, alpha = 0.05){    
     part_files = fetch_files_by_tissue(strain, tissue, files)
@@ -132,8 +131,8 @@ for (strain in c("w1118")){
 ```
 
 
-
-```{r compare gene-level and transcript-level DESeq2 tests for two well-known genes Yp1 and fne}
+# compare gene-level and transcript-level tests for two well-known genes Yp1 and fne
+```{r compare gene-level and transcript-level tests for two well-known genes Yp1 and fne}
 strain = "w1118"
 tissue = "hd"
 
@@ -149,17 +148,14 @@ g[get_FBgn_for_symbol("fne"),]
 
 t[get_FBtrs_for_symbol("fne"),]
 
-# Yp1 (FBgn0004045) expression is sex-biased at gene level
-# also at isoform level
-# 
-# on the other hand
-# fne (FBgn0086675) expression is not sex-biased at gene level
-# but two of fne isoforms show sex-biased expression
 
 ```
+* Summary
+* Yp1 (FBgn0004045) expression is sex-biased at both gene and isoform level
+* fne (FBgn0086675) expression is not sex-biased at gene level, but two of fne isoforms show sex-biased expression
 
 
-
+# isoform-level MAplots
 ```{r print isoform-level MAplots}
 for (strain_tissue in names(alltrans)){
   x = alltrans[[strain_tissue]]
@@ -175,7 +171,7 @@ for (strain_tissue in names(alltrans)){
   
   
   
-  
+# expression of fne isoforms in boxplot
 ```{r expression fne two isoforms in boxplot}
 target_gene = "fne"
 
@@ -222,8 +218,8 @@ dev.off()
 ```
 
 
-
-```{r compare gene- and transcript-level salmon-tximport-deseq2 analyses of sex-biased expression}
+# compare and summarize gene and transcript level salmon-tximport-deseq2 analyses
+```{r compare gene and transcript level salmon-tximport-deseq2 analyses of sex-biased expression}
 # fne expression is not sex-biased at gene level
 # but two of fne isoforms show sex-biased expression
 c = data.frame(row.names=FBgn2FBtr$FBtr, FBgn = FBgn2FBtr$FBgn)
