@@ -20,5 +20,6 @@ http://www.g3journal.org/content/ggg/5/12/2865.full.pdf<br>
 
 
 
-
+* Sex-biased expression of two fne isoforms<br>
+![alt text](https://s3.us-east-2.amazonaws.com/haiwangyang.com/image/fne.png)
 
