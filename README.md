@@ -40,5 +40,7 @@ transana/testdata/salmon/ has salmon data (YO: YangOliver annotation)<br>
 
 
 * Sex-biased expression of two fne isoforms<br>
-![alt text](https://s3.us-east-2.amazonaws.com/haiwangyang.com/image/fne.png??)
+![alt text](https://s3.us-east-2.amazonaws.com/haiwangyang.com/image/fne.png??)<br>
 
+* Overall picture of transcript level MAplots<br>
+![alt text](https://s3.us-east-2.amazonaws.com/haiwangyang.com/image/transMAplots.png)<br>
