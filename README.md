@@ -20,14 +20,16 @@ fne gene manuscript<br>
 Sun et al. 2015 http://www.g3journal.org/content/ggg/5/12/2865.full.pdf<br>
 
 * R Script and data structure<br>
-** main script<br>
-transana/tximport.Rmd<br>
+** main script for dmel<br>
+transana/transana_for_dmel.Rmd<br>
+** main script for non-dmel<br>
+transana/transana_for_nondmel.Rmd<br>
 ** main data folder<br>
 transana/data/<br>
 ** main output folder<br>
 transana/output/<br>
 ** test script<br>
-transana/tximport_testdata.Rmd<br>
+transana/transana_for_dmel_testdata.Rmd<br>
 ** test data folder<br>
 transana/testdata/<br>
 It has the same data strucutre as transana/data/, but I only kept the minimum data for testing purpose.<br>
