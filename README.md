@@ -17,7 +17,7 @@ tximport:<br>
 https://bioconductor.org/packages/release/bioc/html/tximport.html<br>
 https://f1000research.com/articles/4-1521/v1<br>
 fne gene manuscript<br>
-http://www.g3journal.org/content/ggg/5/12/2865.full.pdf<br>
+Sun et al. 2015 http://www.g3journal.org/content/ggg/5/12/2865.full.pdf<br>
 
 * R Script and data structure<br>
 ** main script<br>
