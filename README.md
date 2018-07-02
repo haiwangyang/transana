@@ -43,4 +43,5 @@ transana/testdata/salmon/ has salmon data (YO: YangOliver annotation)<br>
 ![alt text](https://s3.us-east-2.amazonaws.com/haiwangyang.com/image/fne.png??)<br>
 
 * Overall picture of transcript level MAplots<br>
+Red, black, and blue dots are female-, un-, and male-biased expressed transcripts<br>
 ![alt text](https://s3.us-east-2.amazonaws.com/haiwangyang.com/image/transMAplots.png)<br>
