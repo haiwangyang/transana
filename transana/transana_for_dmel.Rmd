@@ -170,8 +170,8 @@ for (strain_tissue in names(alltrans)){
 }
 ```
   
-  
-  
+
+
 # expression of fne isoforms in boxplot
 ```{r expression fne two isoforms in boxplot}
 target_gene = "fne"
@@ -214,9 +214,11 @@ par(mfrow=c(1,2))
 ggplot(data = target_nrc, aes(x = target_nrc$fulltissue, y = FBtr0306738, fill = target_nrc$sex)) + geom_boxplot(outlier.size=-1) + theme_bw() + scale_fill_manual(values = c("red", "blue")) + ylab("log2 (normalized read count + 1) of isoform FBtr0306738")
 ggplot(data = target_nrc, aes(x = target_nrc$fulltissue, y = FBtr0306739, fill = target_nrc$sex)) + geom_boxplot(outlier.size=-1) + theme_bw() + scale_fill_manual(values = c("red", "blue")) + ylab("log2 (normalized read count + 1) of isoform FBtr0306739")
 dev.off()
-
-
 ```
+
+
+
+
 
 
 # compare and summarize gene and transcript level salmon-tximport-deseq2 analyses
