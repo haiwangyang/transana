@@ -21,9 +21,17 @@ Sun et al. 2015 http://www.g3journal.org/content/ggg/5/12/2865.full.pdf<br>
 
 * R Script and data structure<br>
 ** main script for dmel<br>
-transana/transana_for_dmel.Rmd<br>
+transana/transana_sexbias_for_dmel.Rmd<br>
+transana/transana_tissuebias_for_dmel.Rmd<br>
 ** main script for non-dmel<br>
-transana/transana_for_nondmel.Rmd<br>
+transana/transana_sexbias_for_nondmel.Rmd<br>
+transana/transana_tissuebias_for_nondmel.Rmd<br>
+** sub main script for dmel<br>
+transana/geneana_sexbias_for_dmel.Rmd<br>
+transana/geneana_tissuebias_for_dmel.Rmd<br>
+** sub main script for non-dmel<br>
+transana/geneana_sexbias_for_nondmel.Rmd<br>
+transana/geneana_tissuebias_for_nondmel.Rmd<br>
 ** main data folder<br>
 transana/data/<br>
 ** main output folder<br>
