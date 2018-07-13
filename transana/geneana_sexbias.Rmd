@@ -1,0 +1,161 @@
+---
+title: "geneana_for_dmel"
+author: "Haiwang Yang"
+date: "7/10/2018"
+---
+
+```{r setup, include=FALSE}
+library("pheatmap")
+library("RColorBrewer")
+library("ggplot2")
+library(Hmisc)
+library(tximportData)
+library(tximport)
+library(rjson)
+library(ggplot2)
+library(DESeq2)
+```
+
+# basic variables, data, and look-up tables
+```{r basic variables, data, and look-up tables}
+base_path = "/Users/yangh13/transana/transana/"
+dir <- paste0(base_path, "data/")
+pwd = paste0(dir,"htseq/FB/")
+
+tissues_in_final_order = c( "wb", "go", "re", "ge", "tx", "dg", "hd", "ac")
+sexed_tissues_in_final_order = do.call(paste, expand.grid(c("f","m"), tissues_in_final_order))
+tissues_in_final_order_no_ge = c( "wb", "go", "re", "tx", "dg", "hd", "ac")
+sexed_tissues_in_final_order_no_ge = do.call(paste, expand.grid(c("f","m"), tissues_in_final_order_no_ge))
+
+species = "dmel" # use dmel w1118 as a test
+
+samples <- read.table(file.path(dir, paste0(species, ".design")), header = TRUE)
+files <- file.path(dir, "salmon", "FB", samples$sample_id, "quant.sf")
+names(files) <- samples$sample_id
+tx2gene = read.table(paste0(dir, species, ".tx2gene"), header=TRUE)
+FBgn2FBtr = read.table(paste0(dir, species, ".FBgn2FBtr"), header=TRUE)
+gene2ortho = read.table(paste0(dir, species, ".ortholog"), header=TRUE)
+gene2symbol = read.table(paste0(dir, species, ".FBgn2symbol"), header=TRUE)
+```
+
+
+# basic funtions
+```{r basic funtions}
+first = function(str) {v = strsplit(as.character(str), "\\_")[[1]]; paste(v[1])}
+second = function(str) {v = strsplit(as.character(str), "\\_")[[1]]; paste(v[2])}
+third = function(str) {v = strsplit(as.character(str), "\\_")[[1]]; paste(v[3])}
+fourth = function(str) {v = strsplit(as.character(str), "\\_")[[1]]; paste(v[4])}
+
+get_tissueFull = function(tissue) {gsub("wb", "whole\norganism", gsub("re", "reproductive\ntract", gsub("hd", "head", gsub("dg", "viscera", gsub("tx", "thorax", gsub("ge", "terminalia",gsub("ac", "abdomen", gsub("go","gonad", tissue))))))))}
+
+fetch_files_by_tissue = function(strain, tissue, files){
+  return(files[ grepl(paste0(strain, "_"), files) & grepl(paste0("_", tissue, "_"), files)])
+}
+
+get_FBgn_for_symbol = function(target_gene){
+  target_FBgn = as.character(gene2symbol$FBgn[gene2symbol$symbol == target_gene])
+  return(target_FBgn)
+}
+
+get_FBtrs_for_symbol = function(target_gene){
+  target_FBgn = get_FBgn_for_symbol(target_gene)
+  target_FBtrs = as.character(FBgn2FBtr$FBtr[FBgn2FBtr$FBgn == target_FBgn])
+  return(target_FBtrs)
+}
+
+```
+
+
+
+# gene-level salmon-tximport-deseq2 analyses of sex-biased expression
+```{r get gene-level salmon-tximport-deseq2 analyses of sex-biased expression}
+
+compare_male_female_of_the_same_tissue = function(countData_this, colData_this, tissue, alpha=0.05) {
+  
+  part_countData = countData_this[,names(countData_this)[grepl(paste0("_",tissue,"_"),names(countData_this)) & !grepl("dyak_m_wb_R4",names(countData_this))]]
+  part_colData = colData_this[colnames(part_countData),]
+  
+  # do deseq2
+  part_dds = DESeqDataSetFromMatrix(part_countData, part_colData, design=~sex)
+  part_dds = estimateSizeFactors(part_dds)
+  part_dds = DESeq(part_dds)
+  resultsNames(part_dds)
+  part_res = results(part_dds)
+  summary(part_res,alpha=alpha)
+  
+  part_dds = estimateSizeFactors(part_dds)
+  part_normCounts = counts(part_dds, normalized=TRUE)
+  
+  part_res_sig = part_res[part_res$padj<alpha & !is.na(part_res$padj),]
+  part_res_sig_male = part_res_sig[part_res_sig$log2FoldChange>0,]
+  part_res_sig_female = part_res_sig[part_res_sig$log2FoldChange<0,]
+  FBgns_res_sig_male = rownames(part_res_sig_male)
+  FBgns_res_sig_female = rownames(part_res_sig_female)
+  
+  FBgns_all = rownames(part_res)
+  FBgns_all_minus_m = FBgns_all[! FBgns_all %in% FBgns_res_sig_male]
+  FBgns_unbiased = FBgns_all_minus_m[! FBgns_all_minus_m %in% FBgns_res_sig_female]
+  df_bias_m = data.frame("FBgn_ID"=as.character(unlist(FBgns_res_sig_male)),"bias"="male")
+  df_bias_unbias = data.frame("FBgn_ID"=FBgns_unbiased,"bias"="unbiased")
+  df_bias_f = data.frame("FBgn_ID"=as.character(unlist(FBgns_res_sig_female)),"bias"="female")
+  df_bias_total = rbind(df_bias_m,df_bias_unbias,df_bias_f)
+  df_bias_total$FBgn_ID = as.character(df_bias_total$FBgn_ID)
+  df_bias_total = df_bias_total[order(df_bias_total$FBgn_ID),]
+  
+
+    x = log2(part_normCounts+1)
+    x = merge(x, part_res, by="row.names")
+    row.names(x) = x$Row.names 
+    x = x[,-1]
+
+    x$bias = df_bias_total$bias
+    
+
+    x$col = rgb(0,0,0,0.3)
+    x$col[x$bias == "female"] = rgb(1,0,0,0.6)
+    x$col[x$bias == "male"] = rgb(0,0,1,0.6)
+    x$MAplot_mean_R1 = (x[,1] + x[,2])/2
+    x$MAplot_log2FoldChange = x$log2FoldChange
+    
+  return(x)
+}
+
+
+geneana = list()
+for (strain in c("w1118", "oreR", species_in_final_order[2:8], "dgriG1")){
+  species = strain
+  version = "YO"
+  tissues = tissues_in_final_order_no_ge
+  if (strain %in% c("w1118", "oreR")){
+    species = "dmel"
+    tissues = tissues_in_final_order
+    version = "FB"
+  }
+  if (strain %in% c("dgriG1")){
+    species = "dgri"
+    tissues = tissues_in_final_order
+  }
+  for (tissue in tissues){
+    print(paste0(strain, " ", tissue))
+    colData_species = read.table(paste0(base_path, "data/", species, ".design"), header=TRUE, sep='',row.names='sample_id')
+    countData_species = read.table(paste0(base_path, "data/htseq/", version, "/", species,".htseq_genic.txt.mat"), header=TRUE, sep='\t',row.names="FBgn")
+    countData_species = countData_species[!grepl("^ERCC",row.names(countData_species)),]
+    countData_species = countData_species[!grepl("^__",row.names(countData_species)),]
+    countData_this = countData_species[,grepl(strain, colnames(countData_species))]
+    colData_this = colData_species[colnames(countData_this),]
+
+    geneana[[paste0(strain, "_", tissue)]] = compare_male_female_of_the_same_tissue(countData_this, colData_this,  tissue, alpha=0.05)
+  }
+}
+
+strain = "oreR"
+for (tissue in tissues_in_final_order){print(table(geneana[[paste0(strain, "_", tissue)]]$bias))}
+
+#save(geneana,file=paste0(base_path, "output/geneana_sexbias.rtable"))
+load(paste0(base_path, "output/geneana_sexbias.rtable"))
+
+```
+
+
+
+

@@ -1,0 +1,439 @@
+---
+title: "transana_for_dmel"
+author: "Haiwang Yang"
+date: "6/19/2018"
+---
+
+```{r setup, include=FALSE}
+library("pheatmap")
+library("RColorBrewer")
+library("ggplot2")
+library(Hmisc)
+library(tximportData)
+library(tximport)
+library(rjson)
+library(ggplot2)
+library(DESeq2)
+```
+
+# basic variables, data, and look-up tables
+```{r basic variables, data, and look-up tables}
+base_path = "/Users/yangh13/transana/transana/"
+dir <- paste0(base_path, "data/")
+
+tissues_in_final_order = c( "wb", "go", "re", "ge", "tx", "dg", "hd", "ac")
+sexed_tissues_in_final_order = do.call(paste, expand.grid(c("f","m"), tissues_in_final_order))
+tissues_in_final_order_no_ge = c( "wb", "go", "re", "tx", "dg", "hd", "ac")
+sexed_tissues_in_final_order_no_ge = do.call(paste, expand.grid(c("f","m"), tissues_in_final_order_no_ge))
+
+species_in_final_order = c("dmel", "dyak", "dana", "dpse", "dper", "dwil", "dmoj", "dvir", "dgri")
+```
+
+
+# basic funtions
+```{r basic funtions}
+first = function(str) {v = strsplit(as.character(str), "\\_")[[1]]; paste(v[1])}
+second = function(str) {v = strsplit(as.character(str), "\\_")[[1]]; paste(v[2])}
+third = function(str) {v = strsplit(as.character(str), "\\_")[[1]]; paste(v[3])}
+fourth = function(str) {v = strsplit(as.character(str), "\\_")[[1]]; paste(v[4])}
+
+get_tissueFull = function(tissue) {gsub("wb", "whole organism", gsub("re", "reproductive tract", gsub("hd", "head", gsub("dg", "viscera", gsub("tx", "thorax", gsub("ge", "terminalia",gsub("ac", "abdomen", gsub("go","gonad", tissue))))))))}
+
+fetch_files_by_tissue = function(strain, tissue, files){
+  return(files[ grepl(paste0(strain, "_"), files) & grepl(paste0("_", tissue, "_"), files)])
+}
+
+get_FBgn_for_symbol = function(target_gene){
+  target_FBgn = as.character(gene2symbol$FBgn[gene2symbol$symbol == target_gene])
+  return(target_FBgn)
+}
+
+get_FBtrs_for_symbol = function(target_gene){
+  target_FBgn = get_FBgn_for_symbol(target_gene)
+  target_FBtrs = as.character(FBgn2FBtr$FBtr[FBgn2FBtr$FBgn == target_FBgn])
+  return(target_FBtrs)
+}
+
+```
+
+
+
+# transcript-level salmon-tximport-deseq2 analyses of sex-biased expression
+```{r get transcript-level salmon-tximport-deseq2 analyses of sex-biased expression}
+analyze_sex_bias = function(strain, tissue, level, alpha = 0.05){    
+    part_files = fetch_files_by_tissue(strain, tissue, files)
+    part_samples = samples[samples$sample_id %in% names(part_files),]
+    part_samples$sex = factor(part_samples$sex, levels = c("m", "f"))
+    
+    if (level == "gene"){
+      txi <- tximport(part_files, type = "salmon", tx2gene = tx2gene) # gene-level output
+    }
+    
+    if (level == "transcript"){
+      txi <- tximport(part_files, type = "salmon", txOut = TRUE) # transcript-level output
+    }
+    
+    dds <- DESeqDataSetFromTximport(txi, part_samples, ~sex)
+    dds = DESeq(dds)
+    
+    res = results(dds) # log2fc is f/m, so Yp1-transcript has 13
+    res = res[order(row.names(res)),]
+    
+    res_sig = res[res$padj<alpha & !is.na(res$padj),]
+    res_sig_female = res_sig[res_sig$log2FoldChange>0,]
+    res_sig_male = res_sig[res_sig$log2FoldChange<0,]
+    FBids_res_sig_female = rownames(res_sig_female)  
+    FBids_res_sig_male = rownames(res_sig_male)
+    
+    FBids_all = rownames(res)
+    FBids_all_minus_m = FBids_all[! FBids_all %in% FBids_res_sig_male]
+    FBids_unbiased = FBids_all_minus_m[! FBids_all_minus_m %in% FBids_res_sig_female]
+    df_bias_m = data.frame("FBid_ID"=as.character(unlist(FBids_res_sig_male)),"bias"="male")
+    df_bias_unbias = data.frame("FBid_ID"=FBids_unbiased,"bias"="unbiased")
+    df_bias_f = data.frame("FBid_ID"=as.character(unlist(FBids_res_sig_female)),"bias"="female")
+    df_bias_total = rbind(df_bias_m,df_bias_unbias,df_bias_f)
+    df_bias_total$FBid_ID = as.character(df_bias_total$FBid_ID)
+    df_bias_total = df_bias_total[order(df_bias_total$FBid_ID),]
+    df_bias_total = df_bias_total[order(df_bias_total$FBid_ID),]
+    
+    normCounts = counts(dds, normalized=TRUE)
+    x = as.data.frame(log2(normCounts+1))
+    x = x[order(row.names(x)),]
+    
+    x$MAplot_mean = as.numeric(apply(x, 1, mean))
+    x$MAplot_log2FoldChange = res$log2FoldChange
+    x$bias = df_bias_total$bias
+    
+    x$col = rgb(0,0,0,0.3)
+    x$col[x$bias == "female"] = rgb(1,0,0,0.6)
+    x$col[x$bias == "male"] = rgb(0,0,1,0.6)
+    return(x)
+}
+
+
+transana = list()
+for (species in species_in_final_order){
+  strain = species
+  ver = "FB"
+  tissues = tissues_in_final_order_no_ge
+  if (species == "dmel"){
+    strain = "w1118"
+    ver = "YO"
+    tissues = tissues_in_final_order
+  }
+  if (species == "dgri"){
+    strain = "dgriG1"
+    tissues = tissues_in_final_order
+  }
+  samples <- read.table(file.path(dir, paste0(species, ".design")), header = TRUE)
+  files <- file.path(dir, "salmon", ver, samples$sample_id, "quant.sf")
+  names(files) <- samples$sample_id
+  tx2gene = read.table(paste0(dir, species, ".tx2gene"), header=TRUE)
+  gene2ortho = read.table(paste0(dir, species, ".ortholog.txt"), header=TRUE)
+
+  for (tissue in tissues){
+    x = analyze_sex_bias(strain, tissue, "transcript", 0.05)
+    transana[[paste0(strain, "_", tissue)]] = x
+  }
+}
+
+species = "dgri"
+samples <- read.table(file.path(dir, paste0(species, ".design")), header = TRUE)
+files <- file.path(dir, "salmon", "YO", samples$sample_id, "quant.sf")
+names(files) <- samples$sample_id
+tx2gene = read.table(paste0(dir, species, ".tx2gene"), header=TRUE)
+gene2ortho = read.table(paste0(dir, species, ".ortholog.txt"), header=TRUE)
+
+for (tissue in tissues_in_final_order){
+  x = analyze_sex_bias(paste0(species, "G1"), tissue, "transcript", 0.05)
+  transana[[paste0(species, "_", tissue)]] = x
+}
+
+# save(transana,file=paste0(base_path, "output/transana.rtable"))
+load(paste0(base_path, "output/transana.rtable"))
+
+```
+
+
+# transcript-level salmon-tximport-deseq2 analyses of tissue-biased expression
+```{r get transcript-level salmon-tximport-deseq2 analyses of tissue-biased expression}
+analyze_tissue_bias = function(strain, sex, tissue, level, alpha = 0.05){ 
+    part_files = fetch_files_by_tissue(strain, tissue, files)
+    part_samples = samples[samples$sample_id %in% names(part_files),]
+    part_samples$sex = factor(part_samples$sex, levels = c("m", "f"))
+    
+    if (level == "gene"){
+      txi <- tximport(part_files, type = "salmon", tx2gene = tx2gene) # gene-level output
+    }
+    
+    if (level == "transcript"){
+      txi <- tximport(part_files, type = "salmon", txOut = TRUE) # transcript-level output
+    }
+    
+    dds <- DESeqDataSetFromTximport(txi, part_samples, ~sex)
+    dds = DESeq(dds)
+    
+    res = results(dds) # log2fc is f/m, so Yp1-transcript has 13
+    res = res[order(row.names(res)),]
+    
+    res_sig = res[res$padj<alpha & !is.na(res$padj),]
+    res_sig_female = res_sig[res_sig$log2FoldChange>0,]
+    res_sig_male = res_sig[res_sig$log2FoldChange<0,]
+    FBids_res_sig_female = rownames(res_sig_female)  
+    FBids_res_sig_male = rownames(res_sig_male)
+    
+    FBids_all = rownames(res)
+    FBids_all_minus_m = FBids_all[! FBids_all %in% FBids_res_sig_male]
+    FBids_unbiased = FBids_all_minus_m[! FBids_all_minus_m %in% FBids_res_sig_female]
+    df_bias_m = data.frame("FBid_ID"=as.character(unlist(FBids_res_sig_male)),"bias"="male")
+    df_bias_unbias = data.frame("FBid_ID"=FBids_unbiased,"bias"="unbiased")
+    df_bias_f = data.frame("FBid_ID"=as.character(unlist(FBids_res_sig_female)),"bias"="female")
+    df_bias_total = rbind(df_bias_m,df_bias_unbias,df_bias_f)
+    df_bias_total$FBid_ID = as.character(df_bias_total$FBid_ID)
+    df_bias_total = df_bias_total[order(df_bias_total$FBid_ID),]
+    df_bias_total = df_bias_total[order(df_bias_total$FBid_ID),]
+    
+    normCounts = counts(dds, normalized=TRUE)
+    x = as.data.frame(log2(normCounts+1))
+    x = x[order(row.names(x)),]
+    
+    x$MAplot_mean = as.numeric(apply(x, 1, mean))
+    x$MAplot_log2FoldChange = res$log2FoldChange
+    x$bias = df_bias_total$bias
+    
+    x$col = rgb(0,0,0,0.3)
+    x$col[x$bias == "female"] = rgb(1,0,0,0.6)
+    x$col[x$bias == "male"] = rgb(0,0,1,0.6)
+    return(x)
+}
+
+
+transana = list()
+for (strain in c("w1118", "oreR", species_in_final_order[2:8], "dgriG1")){
+  species = strain
+  version = "YO"
+  tissues = tissues_in_final_order_no_ge
+  if (strain %in% c("w1118", "oreR")){
+    species = "dmel"
+    tissues = tissues_in_final_order
+    version = "FB"
+  }
+  if (strain %in% c("dgriG1")){
+    species = "dgri"
+    tissues = tissues_in_final_order
+  }
+  samples <- read.table(file.path(dir, paste0(species, ".design")), header = TRUE)
+  files <- file.path(dir, "salmon", ver, samples$sample_id, "quant.sf")
+  names(files) <- samples$sample_id
+  tx2gene = read.table(paste0(dir, species, ".tx2gene"), header=TRUE)
+  gene2ortho = read.table(paste0(dir, species, ".ortholog.txt"), header=TRUE)
+
+  for (tissue in tissues){
+    x = analyze_sex_bias(strain, tissue, "transcript", 0.05)
+    transana[[paste0(species, "_", tissue)]] = x
+  }
+}
+
+# save(transana,file=paste0(base_path, "output/transana.rtable"))
+load(paste0(base_path, "output/transana.rtable"))
+
+```
+
+
+# compare gene-level and transcript-level tests for two well-known genes Yp1 and fne
+```{r compare gene-level and transcript-level tests for two well-known genes Yp1 and fne}
+strain = "w1118"
+tissue = "hd"
+
+g = analyze_sex_bias(strain, tissue, "gene", 0.05)
+t = analyze_sex_bias(strain, tissue, "transcript", 0.05)
+
+g[get_FBgn_for_symbol("Yp1"),]
+
+t[get_FBtrs_for_symbol("Yp1"),]
+
+
+g[get_FBgn_for_symbol("fne"),]
+
+t[get_FBtrs_for_symbol("fne"),]
+
+# Conclusion
+# Yp1 (FBgn0004045) expression is sex-biased at both gene and isoform level
+# fne (FBgn0086675) expression is not sex-biased at gene level, but two of fne isoforms show sex-biased expression
+
+```
+
+
+```{r get transcript-level salmon-tximport-deseq2 analyses of tissue-biased expression}
+analyze_tissue_bias = function(strain, tissue, level, alpha = 0.05){    
+    part_files = fetch_files_by_tissue(strain, tissue, files)
+    part_samples = samples[samples$sample_id %in% names(part_files),]
+    part_samples$sex = factor(part_samples$sex, levels = c("m", "f"))
+    
+    if (level == "gene"){
+      txi <- tximport(part_files, type = "salmon", tx2gene = tx2gene) # gene-level output
+    }
+    
+    if (level == "transcript"){
+      txi <- tximport(part_files, type = "salmon", txOut = TRUE) # transcript-level output
+    }
+    
+    dds <- DESeqDataSetFromTximport(txi, part_samples, ~sex)
+    dds = DESeq(dds)
+    
+    res = results(dds) # log2fc is f/m, so Yp1-transcript has 13
+    res = res[order(row.names(res)),]
+    
+    res_sig = res[res$padj<alpha & !is.na(res$padj),]
+    res_sig_female = res_sig[res_sig$log2FoldChange>0,]
+    res_sig_male = res_sig[res_sig$log2FoldChange<0,]
+    FBids_res_sig_female = rownames(res_sig_female)  
+    FBids_res_sig_male = rownames(res_sig_male)
+    
+    FBids_all = rownames(res)
+    FBids_all_minus_m = FBids_all[! FBids_all %in% FBids_res_sig_male]
+    FBids_unbiased = FBids_all_minus_m[! FBids_all_minus_m %in% FBids_res_sig_female]
+    df_bias_m = data.frame("FBid_ID"=as.character(unlist(FBids_res_sig_male)),"bias"="male")
+    df_bias_unbias = data.frame("FBid_ID"=FBids_unbiased,"bias"="unbiased")
+    df_bias_f = data.frame("FBid_ID"=as.character(unlist(FBids_res_sig_female)),"bias"="female")
+    df_bias_total = rbind(df_bias_m,df_bias_unbias,df_bias_f)
+    df_bias_total$FBid_ID = as.character(df_bias_total$FBid_ID)
+    df_bias_total = df_bias_total[order(df_bias_total$FBid_ID),]
+    df_bias_total = df_bias_total[order(df_bias_total$FBid_ID),]
+    
+    normCounts = counts(dds, normalized=TRUE)
+    x = as.data.frame(log2(normCounts+1))
+    x = x[order(row.names(x)),]
+    
+    x$MAplot_mean = as.numeric(apply(x, 1, mean))
+    x$MAplot_log2FoldChange = res$log2FoldChange
+    x$bias = df_bias_total$bias
+    
+    x$col = rgb(0,0,0,0.3)
+    x$col[x$bias == "female"] = rgb(1,0,0,0.6)
+    x$col[x$bias == "male"] = rgb(0,0,1,0.6)
+    return(x)
+}
+
+```
+
+
+# Isoform-level MAplots summary as barplots
+```{r print isoform-level MAplots}
+dft = data.frame()
+for (species_tissue in names(transana)){
+  species = first(species_tissue)
+  tissue = second(species_tissue)
+  x = transana[[species_tissue]]
+  
+  tb0 = table(x$bias)
+  df0 = as.data.frame(tb0)
+  colnames(df0) = c("sexbias", "num")
+  df0$species = species
+  df0$tissue = get_tissueFull(tissue)
+  dft = rbind(dft, df0)
+}
+
+dft$sexbias = factor(dft$sexbias, levels=c("female", "unbiased", "male"))
+
+dft = dft[,c("species", "tissue", "sexbias", "num")]
+#dff = reshape(df,idvar = c("species", "tissue"), timevar = "sexbias", direction = "wide")
+
+dft$speciestissue = as.character(interaction(dft$species, dft$tissue))
+dft$speciestissue = factor(dft$speciestissue, levels = unique(dft$speciestissue))
+
+
+pdf(paste0(base_path, "/output/sexbias.bar.summary.nonDmel.pdf"),width=10,height=10,useDingbats=FALSE)
+ggplot(dft[1:171,], aes(x = speciestissue, fill= sexbias, group= sexbias, y= num)) + geom_bar(stat = "identity") + scale_fill_manual(values = c("blue", "grey", "red")) + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1)) + ylab("number of genes")
+dev.off()
+
+```
+  
+
+
+# expression of fne isoforms in boxplot
+```{r expression fne two isoforms in boxplot}
+target_gene = "fne"
+
+target_FBtrs = get_FBtrs_for_symbol(target_gene)
+
+target_nrc = data.frame(row.names = target_FBtrs)
+target_lfc = data.frame(row.names = target_FBtrs)
+target_bias = data.frame(row.names = target_FBtrs)
+for (strain_tissue in names(transana)){
+  x = transana[[strain_tissue]]
+  
+  target_nrc = cbind(target_nrc, x[target_FBtrs,1:8])
+  
+  tmp_target_lfc = data.frame(row.names = target_FBtrs, a = x[target_FBtrs,]$MAplot_log2FoldChange)
+  colnames(tmp_target_lfc) = strain_tissue
+  target_lfc = cbind(target_lfc, tmp_target_lfc)
+  
+  tmp_target_bias = data.frame(row.names = target_FBtrs, a = x[target_FBtrs,]$bias)
+  colnames(tmp_target_bias) = strain_tissue
+  target_bias = cbind(target_bias, tmp_target_bias)
+}
+
+target_nrc = data.frame(t(target_nrc))
+
+target_nrc$strain = sapply(row.names(target_nrc), first)
+target_nrc$sex = sapply(row.names(target_nrc), second)
+target_nrc$tissue = sapply(row.names(target_nrc), third)
+target_nrc$rep = sapply(row.names(target_nrc), fourth)
+target_nrc$sex_tissue = interaction(target_nrc$sex, target_nrc$tissue, sep = " ")
+target_nrc$sex_tissue = factor(target_nrc$sex_tissue, levels = sexed_tissues_in_final_order)
+target_nrc$fulltissue = as.character(sapply(target_nrc$tissue, get_tissueFull))
+target_nrc$fulltissue = factor(target_nrc$fulltissue, levels = unique(target_nrc$fulltissue))
+
+
+
+
+pdf(paste0(base_path, "/output/fne.two.isoform.nrc.boxplot.pdf"),width=6,height=5)
+par(mfrow=c(1,2))
+ggplot(data = target_nrc, aes(x = target_nrc$fulltissue, y = FBtr0306738, fill = target_nrc$sex)) + geom_boxplot(outlier.size=-1) + theme_bw() + scale_fill_manual(values = c("red", "blue")) + ylab("log2 (normalized read count + 1) of isoform FBtr0306738")
+ggplot(data = target_nrc, aes(x = target_nrc$fulltissue, y = FBtr0306739, fill = target_nrc$sex)) + geom_boxplot(outlier.size=-1) + theme_bw() + scale_fill_manual(values = c("red", "blue")) + ylab("log2 (normalized read count + 1) of isoform FBtr0306739")
+dev.off()
+```
+
+
+
+
+
+
+# compare and summarize gene and transcript level salmon-tximport-deseq2 analyses
+```{r compare gene and transcript level salmon-tximport-deseq2 analyses of sex-biased expression}
+c = data.frame(row.names=FBgn2FBtr$FBtr, FBgn = FBgn2FBtr$FBgn)
+
+alltab = data.frame(row.names = c("FALSE.FALSE.FALSE.FALSE", "TRUE.FALSE.FALSE.FALSE", "FALSE.TRUE.FALSE.FALSE","TRUE.TRUE.FALSE.FALSE", "FALSE.FALSE.TRUE.FALSE", "TRUE.FALSE.TRUE.FALSE", "FALSE.TRUE.TRUE.FALSE", "TRUE.TRUE.TRUE.FALSE", "FALSE.FALSE.FALSE.TRUE", "TRUE.FALSE.FALSE.TRUE", "FALSE.TRUE.FALSE.TRUE", "TRUE.TRUE.FALSE.TRUE", "FALSE.FALSE.TRUE.TRUE", "TRUE.FALSE.TRUE.TRUE", "FALSE.TRUE.TRUE.TRUE", "TRUE.TRUE.TRUE.TRUE" ))
+
+for (strain in c("w1118")){
+  for (tissue in tissues_in_final_order){
+    g = analyze_sex_bias(strain, tissue, "gene", 0.05)
+    
+    t = analyze_sex_bias(strain, tissue, "transcript", 0.05)
+    
+    target_FBtrs = get_FBtrs_for_symbol(target_gene)
+    
+    tt = merge(t, c, by="row.names")
+    
+    gs = as.data.frame.matrix(table(row.names(g), g$bias))
+    ts = as.data.frame.matrix(table(tt$FBgn, tt$bias))
+    ss = merge(gs, ts, by="row.names")
+    row.names(ss) = ss$Row.names
+    ss = ss[,-1]
+    
+    sss = ss>0
+
+    # changing of sex-bias    
+    tab = table(interaction(sss[,'female.x'], sss[,'male.x'], sss[,'female.y'], sss[,'male.y']))
+    tab = data.frame(row.names = row.names(tab), a = as.numeric(tab))
+    colnames(tab) = paste0(strain, "_", tissue)
+    
+    alltab = cbind(alltab, tab)
+  }
+}
+  
+```
+
+
+
