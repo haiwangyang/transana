@@ -1,5 +1,6 @@
 transana/data/
 transana/output/
+transana/trash/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
