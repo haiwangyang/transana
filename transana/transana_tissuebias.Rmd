@@ -1,5 +1,5 @@
 ---
-title: "transana_tissuebiasl"
+title: "transana_tissuebias"
 author: "Haiwang Yang"
 date: "6/19/2018"
 ---
@@ -75,7 +75,7 @@ analyze_tissue_bias = function(strain, sex, tissue, level, alpha = 0.05){
   part_files = c(part_files0, part_files1)
   
   part_samples = samples[samples$sample_id %in% names(part_files),]
-  part_samples$tissue = factor(part_samples$tissue, levels = c("wb", tissue))
+  part_samples$tissue = factor(part_samples$tissue, levels = c(tissue, "wb"))
   
   if (level == "gene"){
     txi <- tximport(part_files, type = "salmon", tx2gene = tx2gene) # gene-level output
@@ -92,8 +92,8 @@ analyze_tissue_bias = function(strain, sex, tissue, level, alpha = 0.05){
   res = res[order(row.names(res)),]
   
   res_sig = res[res$padj<alpha & !is.na(res$padj),]
-  res_sig_wb = res_sig[res_sig$log2FoldChange > 0,] # whole body of the same sex
-  res_sig_tt = res_sig[res_sig$log2FoldChange < 0,] # this sexed tissue
+  res_sig_wb = res_sig[res_sig$log2FoldChange < 0,] # whole body of the same sex
+  res_sig_tt = res_sig[res_sig$log2FoldChange > 0,] # this sexed tissue
   FBids_res_sig_wb = rownames(res_sig_wb)  
   FBids_res_sig_tt = rownames(res_sig_tt)
   
@@ -114,6 +114,7 @@ analyze_tissue_bias = function(strain, sex, tissue, level, alpha = 0.05){
   
   x$MAplot_mean = as.numeric(apply(x, 1, mean))
   x$MAplot_log2FoldChange = res$log2FoldChange
+  x$padj = res$padj
   x$bias = df_bias_total$bias
   
   x$col = rgb(0,0,0,0.3)
@@ -123,7 +124,7 @@ analyze_tissue_bias = function(strain, sex, tissue, level, alpha = 0.05){
 }
 
 
-transana = list()
+transana_tb = list()
 for (strain in c("w1118", "oreR", species_in_final_order[2:8], "dgriG1")){
   species = strain
   version = "YO"
@@ -138,21 +139,21 @@ for (strain in c("w1118", "oreR", species_in_final_order[2:8], "dgriG1")){
     tissues = tissues_in_final_order
   }
   samples <- read.table(file.path(dir, paste0(species, ".design")), header = TRUE)
-  files <- file.path(dir, "salmon", ver, samples$sample_id, "quant.sf")
+  files <- file.path(dir, "salmon", version, samples$sample_id, "quant.sf")
   names(files) <- samples$sample_id
   tx2gene = read.table(paste0(dir, species, ".tx2gene"), header=TRUE)
   gene2ortho = read.table(paste0(dir, species, ".ortholog.txt"), header=TRUE)
 
-  for (tissue in tissues){
+  for (tissue in tissues[2:length(tissues)]){
     for (sex in c("f", "m")){
       x = analyze_tissue_bias(strain, sex, tissue, "transcript", 0.05)
-      transana[[paste0(strain, "_", sex, "_", tissue)]] = x
+      transana_tb[[paste0(strain, "_", sex, "_", tissue)]] = x
     }
   }
 }
 
-save(transana,file=paste0(base_path, "output/transana_tissuebias.rtable"))
-# load(paste0(base_path, "output/transana_tissuebias.rtable"))
+# save(transana_tb,file=paste0(base_path, "output/transana_tb.rtable"))
+load(paste0(base_path, "output/transana_tb.rtable"))
 ```
 
 # compare gene-level and transcript-level tests for two well-known genes Yp1 and fne
@@ -176,7 +177,6 @@ t[get_FBtrs_for_symbol("fne"),]
 ```
 
 
-
 # Isoform-level MAplots
 ```{r print isoform-level MAplots}
 
@@ -195,6 +195,69 @@ for (strain_sex_tissue in names(transana)){
 
 ```
   
+
+
+```{r barplot summary for transcript-level tissuebias-MAplots}
+df = data.frame()
+for (strain in c("w1118", species_in_final_order[2:8], "dgriG1")){
+  species = strain
+  tissues = tissues_in_final_order_no_ge
+  if (strain %in% c("w1118", "oreR")){
+    species = "dmel"
+    tissues = tissues_in_final_order
+  }
+  if (strain %in% c("dgriG1")){
+    species = "dgri"
+    tissues = tissues_in_final_order
+  }
+  
+  for (tissue in tissues[2:length(tissues)]){
+    for (sex in c("f", "m")){
+      tb0 = table(transana_tb[[paste0(strain, "_", sex, "_", tissue)]]$bias)
+      cat(strain, " ", sex, " ", tissue," ", tb0,"\n")
+      df0 = as.data.frame(tb0)
+      colnames(df0) = c("tissuebias", "num")
+      df0$species = species
+      df0$sex = sex
+      df0$tissue = get_tissueFull(tissue)
+      df = rbind(df, df0)
+    }
+  }
+}
+
+
+df = df[,c("species", "sex", "tissue", "tissuebias", "num")]
+
+df$sst = as.character(interaction(df$species, df$sex, df$tissue)) # sst = species sex tissue
+df$sst = factor(df$sst, levels = unique(df$sst))
+
+pdf(paste0(base_path, "output/transcript.level.tb.bar.summary.pdf"),width=10,height=10,useDingbats=FALSE)
+ggplot(df, aes(x = sst, fill= tissuebias, group= tissuebias, y= num)) + geom_bar(stat = "identity") + scale_fill_manual(values = c("green", "grey", "purple")) + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1)) + ylab("number of genes")
+dev.off()
+
+```
+
+
+
+```{r correlation of transcript-level tissue-bias between w1118 and oreR}
+df = data.frame()
+for (tissue in tissues[2:length(tissues)]){
+  for (sex in c("f", "m")){
+    A = table(transana_tb[[paste0("w1118_", sex, "_", tissue)]]$bias)
+    B = table(transana_tb[[paste0("oreR_", sex, "_", tissue)]]$bias)
+    
+    df0 = data.frame("w1118" = as.numeric(A["tt"] + A["wb"]), "oreR" = as.numeric(B["tt"] + B["wb"]))
+    df = rbind(df, df0)
+  }
+}
+row.names(df) = tissues
+
+pdf(paste0(base_path, "output/transcript.level.tb.scatterplot.w1118.oreR.pdf"),width=5,height=5,useDingbats=FALSE)
+plot(df$w1118, df$oreR, xlab="number of transcripts with tissue-biased expression in w1118", ylab="number of transcripts with tissue-biased expression in oreR")
+text(8000, 8000, paste0("Pearson's r = ", round(cor(df$w1118, df$oreR), 3)))
+dev.off()
+
+```
 
 
 # expression of fne isoforms in boxplot

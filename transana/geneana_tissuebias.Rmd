@@ -1,7 +1,7 @@
 ---
-title: "geneana_for_dmel"
+title: "gene level analyses for tissue bias"
 author: "Haiwang Yang"
-date: "7/10/2018"
+date: "7/16/2018"
 ---
 
 ```{r setup, include=FALSE}
@@ -154,11 +154,127 @@ for (strain in c("w1118", "oreR", species_in_final_order[2:8], "dgriG1")){
 strain = "oreR"
 for (tissue in tissues_in_final_order){print(table(geneana[[paste0(strain, "_", tissue)]]$bias))}
 
-#save(geneana,file=paste0(base_path, "output/geneana_tissuebias.rtable"))
-load(paste0(base_path, "output/geneana_tissuebias.rtable"))
+#save(geneana_tb,file=paste0(base_path, "output/geneana_tb.rtable"))
+load(paste0(base_path, "output/geneana_tb.rtable"))
+
+```
+
+
+```{r barplot summary for gene-level tissuebias-MAplots}
+df = data.frame()
+for (strain in c("w1118", species_in_final_order[2:8], "dgriG1")){
+  species = strain
+  tissues = tissues_in_final_order_no_ge
+  if (strain %in% c("w1118", "oreR")){
+    species = "dmel"
+    tissues = tissues_in_final_order
+  }
+  if (strain %in% c("dgriG1")){
+    species = "dgri"
+    tissues = tissues_in_final_order
+  }
+  
+  for (tissue in tissues[2:length(tissues)]){
+    for (sex in c("f", "m")){
+      tb0 = table(geneana_tb[[paste0(strain, "_", sex, "_", tissue)]]$bias)
+      cat(strain, " ", sex, " ", tissue," ", tb0,"\n")
+      df0 = as.data.frame(tb0)
+      colnames(df0) = c("tissuebias", "num")
+      df0$species = species
+      df0$sex = sex
+      df0$tissue = get_tissueFull(tissue)
+      df = rbind(df, df0)
+    }
+  }
+}
+
+
+df = df[,c("species", "sex", "tissue", "tissuebias", "num")]
+
+df$sst = as.character(interaction(df$species, df$sex, df$tissue)) # sst = species sex tissue
+df$sst = factor(df$sst, levels = unique(df$sst))
+
+pdf(paste0(base_path, "output/gene.level.tb.bar.summary.pdf"),width=10,height=10,useDingbats=FALSE)
+ggplot(df, aes(x = sst, fill= tissuebias, group= tissuebias, y= num)) + geom_bar(stat = "identity") + scale_fill_manual(values = c("green", "grey", "purple")) + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1)) + ylab("number of genes")
+dev.off()
 
 ```
 
 
 
+
+```{r correlation of gene-level tissue-bias between w1118 and oreR}
+df = data.frame()
+for (tissue in tissues[2:length(tissues)]){
+  for (sex in c("f", "m")){
+    A = table(geneana_tb[[paste0("w1118_", sex, "_", tissue)]]$bias)
+    B = table(geneana_tb[[paste0("oreR_", sex, "_", tissue)]]$bias)
+    
+    df0 = data.frame("w1118" = as.numeric(A["tt"] + A["wb"]), "oreR" = as.numeric(B["tt"] + B["wb"]))
+    df = rbind(df, df0)
+  }
+}
+
+temp = expand.grid(c("f", "m"), tissues[2:length(tissues)])
+row.names(df) = paste(temp$Var1, temp$Var2, sep="_")
+
+colMeans(df)
+# 8761.429 8582.143 
+
+pdf(paste0(base_path, "output/gene.level.tb.scatterplot.w1118.oreR.pdf"),width=5,height=5,useDingbats=FALSE)
+plot(df$w1118, df$oreR, xlab="number of genes with tissue-biased expression in w1118", ylab="number of genes with tissue-biased expression in oreR")
+text(8000, 8000, paste0("Pearson's r = ", round(cor(df$w1118, df$oreR), 3)))
+dev.off()
+```
+
+
+
+
+
+```{r explore why w1118 and oreR reproductive tract have different tissue bias}
+
+w1118 = geneana_tb$w1118_m_re
+table(w1118$bias)
+#      tt unbiased       wb 
+#    3209     8983     5281 
+    
+oreR = geneana_tb$oreR_m_re
+table(oreR$bias)
+#      tt unbiased       wb 
+#    3329     6677     7467 
+
+# list of genes showing difference
+FBgns_diff = row.names(oreR)[oreR$bias == "wb" & w1118$bias != "wb"]
+write.table(FBgns_diff, paste0(base_path, "output/trouble.shooting.w1118.re.txt"),quote=FALSE, row.names=FALSE)
+
+w1118
+
+
+
+
+dmel = cbind(w1118[,1:8],oreR[,1:8])
+
+# show heatmap of 
+pdf(paste0(base_path, "output/trouble.shooting.w1118.re.pdf"),width=5,height=5,useDingbats=FALSE)
+# scatterplot of logfc
+plot(w1118$log2FoldChange, oreR$log2FoldChange)
+# heatmap of nrc
+pheatmap(as.matrix(dmel[FBgns_diff,]), cluster_rows=FALSE, show_rownames=FALSE, cluster_cols=FALSE, show_colnames = TRUE)
+dev.off()
+
+```
+
+```{r specific example for tissue-biased expression}
+# top tb gene
+w1118 = geneana_tb$w1118_m_go
+tail(w1118[order(w1118$padj),])
+# pick Gapdh1 FBgn0001091 
+
+for (tissue in tissues[2:length(tissues)]){
+  for (sex in c("f", "m")){
+    cat(tissue, sex, as.character(geneana_tb[[paste0("w1118_", sex, "_", tissue)]]['FBgn0001091','bias']), "\n")
+  }
+}
+
+```
 

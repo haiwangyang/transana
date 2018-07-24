@@ -1,7 +1,7 @@
 ---
-title: "geneana_for_dmel"
+title: "gene level analyses for sex bias"
 author: "Haiwang Yang"
-date: "7/10/2018"
+date: "7/16/2018"
 ---
 
 ```{r setup, include=FALSE}
@@ -151,11 +151,85 @@ for (strain in c("w1118", "oreR", species_in_final_order[2:8], "dgriG1")){
 strain = "oreR"
 for (tissue in tissues_in_final_order){print(table(geneana[[paste0(strain, "_", tissue)]]$bias))}
 
-#save(geneana,file=paste0(base_path, "output/geneana_sexbias.rtable"))
-load(paste0(base_path, "output/geneana_sexbias.rtable"))
+#save(geneana_sb,file=paste0(base_path, "output/geneana_sb.rtable"))
+load(paste0(base_path, "output/geneana_sb.rtable"))
+
+```
+
+```{r barplot summary for gene-level sexbias-MAplots}
+df = data.frame()
+for (strain in c("w1118", species_in_final_order[2:8], "dgriG1")){
+  species = strain
+  tissues = tissues_in_final_order_no_ge
+  if (strain %in% c("w1118", "oreR")){
+    species = "dmel"
+    tissues = tissues_in_final_order
+  }
+  if (strain %in% c("dgriG1")){
+    species = "dgri"
+    tissues = tissues_in_final_order
+  }
+
+  for (tissue in tissues){
+    tb0 = table(geneana_sb[[paste0(strain, "_", tissue)]]$bias)
+    cat(strain, " ", tissue," ", tb0,"\n")
+    df0 = as.data.frame(tb0)
+    colnames(df0) = c("sexbias", "num")
+    df0$species = species
+    df0$tissue = get_tissueFull(tissue)
+    df = rbind(df, df0)
+  }
+}
+
+
+df = df[,c("species", "tissue", "sexbias", "num")]
+
+df$speciestissue = as.character(interaction(df$species, df$tissue))
+df$speciestissue = factor(df$speciestissue, levels = unique(df$speciestissue))
+
+pdf(paste0(base_path, "output/gene.level.sb.bar.summary.pdf"),width=10,height=10,useDingbats=FALSE)
+ggplot(df, aes(x = speciestissue, fill= sexbias, group= sexbias, y= num)) + geom_bar(stat = "identity") + scale_fill_manual(values = c("blue", "grey", "red")) + theme_bw() + theme(axis.text.x = element_text(angle = 90, hjust = 1)) + ylab("number of genes")
+dev.off()
+
+```
+
+```{r correlation of gene-level sex-bias between w1118 and oreR}
+df = data.frame()
+for (tissue in tissues){
+  A = table(geneana_sb[[paste0("w1118_", tissue)]]$bias)
+  B = table(geneana_sb[[paste0("oreR_", tissue)]]$bias)
+  
+  df0 = data.frame("w1118" = as.numeric(A["male"] + A["female"]), "oreR" = as.numeric(B["male"] + B["female"]))
+  df = rbind(df, df0)
+}
+row.names(df) = tissues
+
+pdf(paste0(base_path, "output/gene.level.sb.scatterplot.w1118.oreR.pdf"),width=5,height=5,useDingbats=FALSE)
+plot(df$w1118, df$oreR, xlab="number of genes with sex-biased expression in w1118", ylab="number of genes with sex-biased expression in oreR")
+text(5000, 5000, paste0("Pearson's r = ", round(cor(df$w1118, df$oreR), 3)))
+dev.off()
+```
+
+```{r specific example for sex-biased expression}
+# top sb gene
+w1118 = geneana_sb$w1118_hd
+head(w1118[order(w1118$padj),])
+# pick roX1 FBgn0019661
 
 ```
 
 
+```{r obtain context cases tx re}
+tx = geneana_sb$w1118_tx
+re = geneana_sb$w1118_re
+# padj_cutoff = 0.0000000000000001
+# tx$bias[tx$padj >= padj_cutoff] = "unbiased"
+# re$bias[re$padj < padj_cutoff] = "unbiased"
 
+x = data.frame(row.names = row.names(tx), tx_bias = tx$bias, re_bias = re$bias)
+y = x[x$tx_bias != "unbiased" & x$re_bias != "unbiased" & x$tx_bias != x$re_bias,]
+dim(y)
 
+A[row.names(y)[y$tx_bias == "female"],]
+
+```
