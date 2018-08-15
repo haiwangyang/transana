@@ -210,6 +210,8 @@ text(5000, 5000, paste0("Pearson's r = ", round(cor(df$w1118, df$oreR), 3)))
 dev.off()
 ```
 
+
+
 ```{r specific example for sex-biased expression}
 # top sb gene
 w1118 = geneana_sb$w1118_hd
@@ -227,9 +229,13 @@ re = geneana_sb$w1118_re
 # re$bias[re$padj < padj_cutoff] = "unbiased"
 
 x = data.frame(row.names = row.names(tx), tx_bias = tx$bias, re_bias = re$bias)
+# context
 y = x[x$tx_bias != "unbiased" & x$re_bias != "unbiased" & x$tx_bias != x$re_bias,]
 dim(y)
 
-A[row.names(y)[y$tx_bias == "female"],]
+# contet and female-tx
+z = row.names(y)[y$tx_bias == "female"]
+
+A[,]
 
 ```
